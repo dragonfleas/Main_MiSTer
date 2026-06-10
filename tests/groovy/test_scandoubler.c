@@ -42,9 +42,8 @@ Test(scandoubler, matching_request_is_idempotent)
    cr_assert_eq(a, GSD_NONE, "already on: no action");
 }
 
-/* T4: during a v2 session the client owns the state absolutely: flag clear
- * decides OFF even when the user's ini had forced_scandoubler on. The 480p
- * case this whole feature exists for. */
+/* T4: during a v2 session the client owns the state: flag clear decides OFF
+ * even when the user's ini had forced_scandoubler on. */
 Test(scandoubler, flag_clear_disables_even_over_ini_setting)
 {
    gsd_state_t s;
@@ -56,8 +55,7 @@ Test(scandoubler, flag_clear_disables_even_over_ini_setting)
    cr_assert_eq(s.saved_cfg, 1, "the ini value must be saved for restore");
 }
 
-/* T5: legacy 26-byte packets are inert in every state: old clients
- * (GroovyMAME) and ini users keep exactly today's behavior. */
+/* T5: legacy 26-byte packets are inert in every state. */
 Test(scandoubler, legacy_packet_never_touches_state)
 {
    gsd_state_t s;
@@ -72,8 +70,7 @@ Test(scandoubler, legacy_packet_never_touches_state)
                 "legacy packet mid-session: still no action");
 }
 
-/* T6: bits 1-7 of displayFlags are reserved and must be ignored, so future
- * flag bits don't accidentally drive the scandoubler. */
+/* T6: reserved displayFlags bits 1-7 are ignored. */
 Test(scandoubler, reserved_flag_bits_are_ignored)
 {
    gsd_state_t s;

@@ -712,9 +712,7 @@ static void groovy_FPGA_blit_lz4(uint32_t bytes, uint16_t numBlit)
 
 }
 
-/* Scandoubler session control (protocol v2). Decisions live in
- * scandoubler.cpp (unit-tested off-target); this applies them by driving
- * hps_io cfg[4] the same way set_vga_fb() does. */
+/* applies scandoubler decisions (scandoubler.cpp) by driving hps_io cfg[4] */
 static gsd_state_t gsd_state = {0, 0};
 
 static void applyScandoubler(gsd_action_t action)
@@ -2453,7 +2451,6 @@ start_error:
 
 void groovy_stop()
 {
-	/* leaving the core: never leak the session's scandoubler override */
 	applyScandoubler(gsd_on_close(&gsd_state, cfg.forced_scandoubler));
 
 	if (doARMClock)

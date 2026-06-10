@@ -4,12 +4,9 @@
 #include <stdint.h>
 #include <stddef.h>
 
-/* Scandoubler session control for protocol v2 (27-byte CMD_SWITCHRES).
- * Pure decision logic so it is unit-testable off-target; the caller applies
- * actions to cfg.forced_scandoubler + user_io_send_buttons(1).
- *
- * Byte 26 of the v2 packet is displayFlags: bit 0 requests the scandoubler
- * for the announced mode, bits 1-7 are reserved and ignored. */
+/* Protocol v2 scandoubler session control: pure decision logic, applied by
+ * the caller via cfg.forced_scandoubler + user_io_send_buttons(1).
+ * displayFlags (byte 26): bit 0 = scandoubler, bits 1-7 reserved. */
 
 #define GSD_FLAG_SCANDOUBLER 0x01
 
@@ -33,15 +30,12 @@ void gsd_init(gsd_state_t *s);
 /* Valid CMD_SWITCHRES datagram lengths: 26 (legacy) or 27 (v2). */
 int gsd_switchres_len_ok(size_t len);
 
-/* Decide on a CMD_SWITCHRES. Legacy 26-byte packets never touch the
- * scandoubler. A 27-byte packet takes session control (saving current_cfg
- * the first time) and returns the action that makes the hardware match
- * flags bit 0, or GSD_NONE if it already does. */
+/* Legacy 26-byte packets decide GSD_NONE. A 27-byte packet takes session
+ * control (saving current_cfg once) and returns the action matching bit 0. */
 gsd_action_t gsd_on_switchres(gsd_state_t *s, size_t len, uint8_t flags,
                               uint8_t current_cfg);
 
-/* Decide on CMD_CLOSE (or core teardown): if a session took control, return
- * the action restoring the user's saved value and release control. */
+/* On CMD_CLOSE / core teardown: restore the saved value, release control. */
 gsd_action_t gsd_on_close(gsd_state_t *s, uint8_t current_cfg);
 
 #ifdef __cplusplus

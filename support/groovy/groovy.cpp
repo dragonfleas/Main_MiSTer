@@ -33,10 +33,12 @@
 #include "../../spi.h"
 #include "../../file_io.h"
 #include "../../user_io.h"
+#include "../../cfg.h"
 
 #include "logo.h"
 #include "pll.h"
 #include "utils.h"
+#include "scandoubler.h"
 
 // USER_IO
 static constexpr auto SCANDOUBLER_OPT = "[4:3]";
@@ -107,7 +109,7 @@ static constexpr auto SERVER_TYPE_OPT = "[59]";
 #define INVALID_UMEM_FRAME UINT64_MAX
 #endif
 
-#define GROOVY_VERSION 1
+#define GROOVY_VERSION 2
 
 // GroovyMiSTer protocol
 #define CMD_CLOSE 1
@@ -710,7 +712,21 @@ static void groovy_FPGA_blit_lz4(uint32_t bytes, uint16_t numBlit)
 
 }
 
-static void setSwitchres(char *recvbuf)
+/* Scandoubler session control (protocol v2). Decisions live in
+ * scandoubler.cpp (unit-tested off-target); this applies them by driving
+ * hps_io cfg[4] the same way set_vga_fb() does. */
+static gsd_state_t gsd_state = {0, 0};
+
+static void applyScandoubler(gsd_action_t action)
+{
+    if (action == GSD_NONE)
+        return;
+    cfg.forced_scandoubler = (action == GSD_SET_ON) ? 1 : 0;
+    user_io_send_buttons(1);
+    LOG(1, "[Scandoubler][%d]\n", cfg.forced_scandoubler);
+}
+
+static void setSwitchres(char *recvbuf, int len)
 {
     //modeline
     uint64_t udp_pclock_bits;
@@ -734,6 +750,13 @@ static void setSwitchres(char *recvbuf)
     memcpy(&udp_vend,&recvbuf[21],2);
     memcpy(&udp_vtotal,&recvbuf[23],2);
     memcpy(&udp_interlace,&recvbuf[25],1);
+
+    uint8_t udp_flags = 0;
+    if (len == 27)
+    {
+        memcpy(&udp_flags,&recvbuf[26],1);
+    }
+    applyScandoubler(gsd_on_switchres(&gsd_state, (size_t)len, udp_flags, cfg.forced_scandoubler));
 
     u.i = udp_pclock_bits;
     double udp_pclock = u.d;
@@ -851,7 +874,9 @@ static void setClose()
 	user_io_status_set(AUDIO_RATE_OPT, (uint32_t)0);
  	user_io_status_set(AUDIO_CHANNELS_OPT, (uint32_t)0);
  	user_io_status_set(RGB_MODE_OPT, (uint32_t)0);
- 	user_io_status_set(LZ4_OPT, (uint32_t)0); 	
+ 	user_io_status_set(LZ4_OPT, (uint32_t)0);
+
+	applyScandoubler(gsd_on_close(&gsd_state, cfg.forced_scandoubler));
 }
 
 #ifdef _AF_XDP
@@ -1961,7 +1986,7 @@ static inline void process_packet(char *recvbufPtr, int len)
 				if (!isBlitting)
 				{
 					isCorePriority = 0;
-					if (len != prev_len && len <= 26)
+					if (len != prev_len && len <= 27)
 					{
 						memcpy((char *) &recvbuf[0], recvbufPtr, len);
 						recvbufPtr = (char *) &recvbuf[0];
@@ -2018,10 +2043,10 @@ static inline void process_packet(char *recvbufPtr, int len)
 
 				case CMD_SWITCHRES:
 				{
-					if (len == 26)
+					if (gsd_switchres_len_ok(len))
 					{
-						LOG(1, "[CMD_SWITCHRES][%d]\n", recvbufPtr[0]);
-			       			setSwitchres(&recvbufPtr[0]);			       			
+						LOG(1, "[CMD_SWITCHRES][%d][len=%d]\n", recvbufPtr[0], len);
+			       			setSwitchres(&recvbufPtr[0], len);
 			       		}
 				}; break;
 
@@ -2428,6 +2453,9 @@ start_error:
 
 void groovy_stop()
 {
+	/* leaving the core: never leak the session's scandoubler override */
+	applyScandoubler(gsd_on_close(&gsd_state, cfg.forced_scandoubler));
+
 	if (doARMClock)
 	{
 		setARMClock(0);
